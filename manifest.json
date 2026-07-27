@@ -1,0 +1,9 @@
+{
+  "id": "counselor-dashboard",
+  "name": "Counselor Dashboard",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Markdown-first client interaction and topic tracking for Christian counselors.",
+  "author": "Corthon",
+  "isDesktopOnly": false
+}
