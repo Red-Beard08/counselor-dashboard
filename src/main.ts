@@ -1,6 +1,7 @@
 /* Plugin entry point registers commands, dashboard, forms, settings, and vault events. */
 
 import { Notice, Plugin, TFile } from "obsidian";
+import { registerDashboardModule, registerDashboardWidget } from "./dashboard-bridge";
 import { CounselingDashboardView, DASHBOARD_VIEW_TYPE } from "./dashboard";
 import { ConcernManagerModal, GoalManagerModal, NewClientModal, NewInteractionModal } from "./modals";
 import { CounselingRepository } from "./repository";
@@ -249,3 +250,23 @@ export default class CounselorDashboardPlugin extends Plugin {
     new Notice(`${prefix}: ${message}`);
   }
 }
+// Red-Beard Dashboard integration: launcher module and independent summary widget.
+const rbDisposals = new WeakMap<object, () => void>();
+const rbOnload = CounselorDashboardPlugin.prototype.onload;
+CounselorDashboardPlugin.prototype.onload = async function(this: CounselorDashboardPlugin) {
+  await rbOnload.call(this);
+  const disposals = [
+    registerDashboardModule(this.app, { id: "counselor-dashboard", name: "Counselor Dashboard", command: "counselor-dashboard:open-dashboard", icon: "notebook-tabs", description: "Counselees, interactions, and active issues.", order: 20 }),
+    registerDashboardWidget(this.app, { id: "counselor-dashboard/overview", name: "Counselor Dashboard", description: "Counselees, interactions, and active issues.", icon: "notebook-tabs", defaultLayout: { w: 4, mobileW: 12, h: 2, order: 40 }, mobile: "responsive", render: (_ctx, container) => {
+      container.createEl("p", { text: "Counselees, interactions, and active issues." });
+      const button = container.createEl("button", { text: "Open Counselor Dashboard" });
+      button.onclick = () => void this.openDashboard();
+    } })
+  ];
+  rbDisposals.set(this, () => disposals.forEach(dispose => dispose()));
+};
+const rbOnunload = CounselorDashboardPlugin.prototype.onunload;
+CounselorDashboardPlugin.prototype.onunload = function(this: CounselorDashboardPlugin) {
+  rbDisposals.get(this)?.();
+ return rbOnunload ? rbOnunload.call(this) : undefined;
+};
