@@ -98,14 +98,22 @@ export default class CounselorDashboardPlugin extends Plugin {
   }
 
   async openDashboard(): Promise<void> {
-    await this.repository.initializeStructure();
-    await this.repository.rebuildAllClientProfiles();
     let leaf = this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE)[0];
     if (!leaf) {
       leaf = this.app.workspace.getLeaf("tab");
       await leaf.setViewState({ type: DASHBOARD_VIEW_TYPE, active: true });
     }
     await this.app.workspace.revealLeaf(leaf);
+    // Open the view before maintenance work so a stale cache or one malformed
+    // record cannot turn the launcher into a no-op. The view can still render
+    // the readable Markdown records while profile summaries are repaired.
+    try {
+      await this.repository.initializeStructure();
+      await this.repository.rebuildAllClientProfiles();
+    } catch (error) {
+      this.reportError("Counselor Dashboard opened with summary repair pending", error);
+    }
+    await this.refreshDashboard();
   }
 
   openNewClientModal(): void {

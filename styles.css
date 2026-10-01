@@ -37,6 +37,21 @@
   color: var(--text-muted);
 }
 
+.counselor-dashboard-root-hint {
+  align-items: baseline;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.8rem 0 0;
+  font-size: var(--font-ui-small);
+}
+
+.counselor-dashboard-root-hint code {
+  color: var(--text-accent);
+  overflow-wrap: anywhere;
+}
+
 .counselor-dashboard-dashboard-actions,
 .counselor-dashboard-form-footer,
 .counselor-dashboard-card-actions {

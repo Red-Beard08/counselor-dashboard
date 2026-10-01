@@ -39,6 +39,9 @@ export class CounselingDashboardView extends ItemView {
       cls: "counselor-dashboard-subtitle",
       text: "Portable Markdown records with linked clients, concerns, topics, and interactions."
     });
+    const rootHint = container.createDiv({ cls: "counselor-dashboard-root-hint" });
+    rootHint.createEl("span", { text: "Records" });
+    rootHint.createEl("code", { text: this.plugin.repository.root });
 
     const actions = header.createDiv({ cls: "counselor-dashboard-dashboard-actions" });
     new ButtonComponent(actions).setButtonText(`New ${this.plugin.settings.clientTerm}`).setCta()
@@ -52,7 +55,16 @@ export class CounselingDashboardView extends ItemView {
       warning.appendText("records are ordinary files and are not encrypted by this plugin. Review storage, sync, access, consent, and retention requirements.");
     }
 
-    const summaries = this.plugin.repository.getClientSummaries();
+    let summaries;
+    try {
+      summaries = this.plugin.repository.getClientSummaries();
+    } catch (error) {
+      const failure = container.createDiv({ cls: "counselor-dashboard-empty" });
+      failure.createEl("h3", { text: "The dashboard could not read the records" });
+      failure.createEl("p", { text: error instanceof Error ? error.message : String(error) });
+      new ButtonComponent(failure).setButtonText("Refresh").setCta().onClick(() => void this.render());
+      return;
+    }
     const metrics = container.createDiv({ cls: "counselor-dashboard-metrics" });
     const interactionTotal = summaries.reduce((sum, client) => sum + client.interactionCount, 0);
     const concernTotal = summaries.reduce((sum, client) => sum + client.openConcernCount, 0);
