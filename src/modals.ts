@@ -11,6 +11,7 @@ import {
   TextComponent
 } from "obsidian";
 import type { ClientRecord, ConcernRecord, GoalRecord, InteractionInput, NewClientInput } from "./types";
+import { legacyFieldsToNotes } from "./interaction-notes";
 import { splitList, todayIso } from "./utils";
 
 export class NewClientModal extends Modal {
@@ -104,19 +105,28 @@ export class NewInteractionModal extends Modal {
       topics: [],
       concerns: [],
       goals: [],
-      summary: "",
-      addToClientContext: false,
-      contextEntry: "",
-      observations: "",
-      biblicalConsiderations: "",
-      interventions: "",
-      commitments: "",
-      followUpDate: ""
+      notes: "",
+      addToClientContext: false
     };
     const canRestoreDraft = initialDraft
       && clients.some(client => client.id === initialDraft.clientId)
       && (!selectedClientId || selectedClientId === initialDraft.clientId);
-    this.input = canRestoreDraft ? { ...defaultInput, ...initialDraft } : defaultInput;
+    if (canRestoreDraft && initialDraft) {
+      this.input = {
+        ...defaultInput,
+        ...initialDraft,
+        notes: legacyFieldsToNotes(initialDraft as unknown as Record<string, unknown>),
+        addToClientContext: Boolean(initialDraft.addToClientContext)
+      };
+      for (const key of ["summary", "contextEntry", "observations", "biblicalConsiderations", "interventions", "commitments", "followUpDate", "interactionCause", "interactionCauseLabel", "issues"]) {
+        delete (this.input as unknown as Record<string, unknown>)[key];
+      }
+    } else {
+      this.input = defaultInput;
+    }
+    this.input.attendees = Array.isArray(this.input.attendees) ? this.input.attendees : [];
+    this.input.topics = Array.isArray(this.input.topics) ? this.input.topics : [];
+    this.input.concerns = Array.isArray(this.input.concerns) ? this.input.concerns : [];
     this.input.goals = Array.isArray(this.input.goals) ? this.input.goals : [];
   }
 
@@ -126,7 +136,7 @@ export class NewInteractionModal extends Modal {
     contentEl.createEl("h2", { text: "Record counseling interaction" });
     contentEl.createEl("p", {
       cls: "counselor-dashboard-form-help",
-      text: "Topics become reusable linked notes. Concerns become client-specific linked records."
+      text: "Keep the interaction in one readable note. Topics, concerns, and goals remain linked records."
     });
 
     this.addClientDropdown(contentEl);
@@ -140,32 +150,15 @@ export class NewInteractionModal extends Modal {
     this.addText(contentEl, "Date", "YYYY-MM-DD", this.input.date, value => this.update({ date: value }), "date");
     this.addText(contentEl, "Interaction type", "individual, couple, phone, email…", this.input.interactionType,
       value => this.update({ interactionType: value }));
+    this.addArea(contentEl, "NOTES", this.input.notes, value => this.update({ notes: value }));
     this.addText(contentEl, "Attendees", "Comma-separated names or roles", this.input.attendees.join(", "),
       value => this.update({ attendees: splitList(value) }));
-    this.addText(contentEl, "Topics", "Forgiveness, anxiety, communication", this.input.topics.join(", "),
-      value => this.update({ topics: splitList(value) }));
-    this.addText(contentEl, "Concerns", "Client-specific concerns, comma-separated", this.input.concerns.join(", "),
-      value => this.update({ concerns: splitList(value) }));
     this.addText(contentEl, "Goals", "Client-specific goals, comma-separated", this.input.goals.join(", "),
       value => this.update({ goals: splitList(value) }));
-    this.addArea(contentEl, "Purpose and summary", this.input.summary, value => this.update({ summary: value }));
-    new Setting(contentEl)
-      .setName("Add to client context")
-      .setDesc("Adds a dated, source-linked entry to the plugin-managed context timeline on the client profile.")
-      .addToggle(toggle => toggle
-        .setValue(this.input.addToClientContext)
-        .onChange(value => this.update({ addToClientContext: value })));
-    this.addArea(contentEl, "Profile context entry", this.input.contextEntry,
-      value => this.update({ contextEntry: value }));
-    this.addArea(contentEl, "Client report and counselor observations", this.input.observations,
-      value => this.update({ observations: value }));
-    this.addArea(contentEl, "Biblical and theological considerations", this.input.biblicalConsiderations,
-      value => this.update({ biblicalConsiderations: value }));
-    this.addArea(contentEl, "Interventions", this.input.interventions, value => this.update({ interventions: value }));
-    this.addArea(contentEl, "Commitments and next steps", this.input.commitments,
-      value => this.update({ commitments: value }));
-    this.addText(contentEl, "Follow-up date", "YYYY-MM-DD", this.input.followUpDate,
-      value => this.update({ followUpDate: value }), "date");
+    this.addText(contentEl, "Concerns", "Client-specific concerns, comma-separated", this.input.concerns.join(", "),
+      value => this.update({ concerns: splitList(value) }));
+    this.addText(contentEl, "Topics", "Forgiveness, anxiety, communication", this.input.topics.join(", "),
+      value => this.update({ topics: splitList(value) }));
 
     const footer = contentEl.createDiv({ cls: "counselor-dashboard-form-footer" });
     new ButtonComponent(footer).setButtonText("Cancel").onClick(() => this.close());
@@ -203,10 +196,12 @@ export class NewInteractionModal extends Modal {
   }
 
   private addArea(container: HTMLElement, name: string, value: string, onChange: (value: string) => void): void {
-    new Setting(container).setName(name).addTextArea((area: TextAreaComponent) => area
-      .setPlaceholder(name)
-      .setValue(value)
-      .onChange(onChange));
+    const setting = new Setting(container).setName(name);
+    if (name === "NOTES") setting.settingEl.addClass("counselor-dashboard-notes-setting");
+    setting.addTextArea((area: TextAreaComponent) => {
+      area.setPlaceholder(name).setValue(value).onChange(onChange);
+      if (name === "NOTES") area.inputEl.addClass("counselor-dashboard-notes-input");
+    });
   }
 
   private async submit(): Promise<void> {
@@ -260,14 +255,8 @@ export class NewInteractionModal extends Modal {
       || this.input.topics.length
       || this.input.concerns.length
       || this.input.goals.length
-      || this.input.summary
+      || this.input.notes
       || this.input.addToClientContext
-      || this.input.contextEntry
-      || this.input.observations
-      || this.input.biblicalConsiderations
-      || this.input.interventions
-      || this.input.commitments
-      || this.input.followUpDate
     );
   }
 }

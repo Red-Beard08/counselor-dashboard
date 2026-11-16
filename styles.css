@@ -276,6 +276,23 @@
   min-height: 90px;
 }
 
+.counselor-dashboard-interaction-modal .counselor-dashboard-notes-setting {
+  display: block;
+  padding: 14px 0 8px;
+}
+
+.counselor-dashboard-interaction-modal .counselor-dashboard-notes-setting .setting-item-control {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.counselor-dashboard-interaction-modal .counselor-dashboard-notes-input {
+  width: 100%;
+  min-height: 180px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
 .counselor-dashboard-form-footer {
   position: sticky;
   bottom: 0;

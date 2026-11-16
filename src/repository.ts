@@ -18,6 +18,10 @@ import {
   wikilink,
   yamlString
 } from "./utils";
+import {
+  consolidateInteractionBody,
+  legacyFrontmatterFieldNames
+} from "./interaction-notes";
 
 const PROFILE_BLOCK_START = "<!-- counselor-dashboard:profile:start -->";
 const PROFILE_BLOCK_END = "<!-- counselor-dashboard:profile:end -->";
@@ -247,34 +251,16 @@ export class CounselingRepository {
       list(concernLinks),
       "goals:",
       list(goalLinks),
-      `session_summary: ${yamlString(input.summary.trim())}`,
-      `add_to_client_context: ${input.addToClientContext}`,
-      `context_entry: ${yamlString(input.contextEntry.trim())}`,
-      `follow_up_date: ${yamlString(input.followUpDate)}`,
+      `interaction_notes_schema_version: 1`,
+      `add_to_client_context: ${Boolean(input.addToClientContext)}`,
       `created: ${yamlString(new Date().toISOString())}`,
       "---",
       "",
       `# ${input.date} — ${input.interactionType}`,
       "",
-      "## Purpose and summary",
+      "## Notes",
       "",
-      input.summary,
-      "",
-      "## Client report and counselor observations",
-      "",
-      input.observations,
-      "",
-      "## Biblical and theological considerations",
-      "",
-      input.biblicalConsiderations,
-      "",
-      "## Interventions",
-      "",
-      input.interventions,
-      "",
-      "## Commitments and next steps",
-      "",
-      input.commitments,
+      input.notes.trim(),
       ""
     ].join("\n");
 
@@ -285,6 +271,53 @@ export class CounselingRepository {
     const clients = this.getClients();
     for (const client of clients) await this.rebuildClientProfile(client.id);
     return clients.length;
+  }
+
+  getLegacyInteractionMigrationCount(): number {
+    return this.getInteractionFiles().filter(file => {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      return Number(fm?.interaction_notes_schema_version ?? 0) < 1;
+    }).length;
+  }
+
+  async migrateLegacyInteractionNotes(): Promise<{ migrated: number; skipped: number; backupPath: string }> {
+    const candidates = this.getInteractionFiles().filter(file => {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      return Number(fm?.interaction_notes_schema_version ?? 0) < 1;
+    });
+    const backupPath = `${this.root}/Backups/Interaction Notes ${timestampForFilename()}`;
+    if (!candidates.length) return { migrated: 0, skipped: 0, backupPath };
+    await this.ensureFolder(`${this.root}/Backups`);
+    await this.ensureFolder(backupPath);
+    let migrated = 0;
+    let skipped = 0;
+    const legacyFields = legacyFrontmatterFieldNames();
+
+    for (const file of candidates) {
+      const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      if (!frontmatter || frontmatter.type !== "counseling-interaction") {
+        skipped++;
+        continue;
+      }
+      const original = await this.app.vault.readBinary(file);
+      const backupFilePath = normalizePath(`${backupPath}/${file.path.slice(this.root.length + 1)}`);
+      await this.ensureFolder(backupFilePath.slice(0, backupFilePath.lastIndexOf("/")));
+      const existingBackup = this.app.vault.getAbstractFileByPath(backupFilePath);
+      if (existingBackup) throw new Error(`Backup destination already exists; migration stopped safely.`);
+      const backupFile = await this.app.vault.createBinary(backupFilePath, original.slice(0));
+      const verifiedBackup = await this.app.vault.readBinary(backupFile);
+      if (!this.sameBytes(original, verifiedBackup)) throw new Error("A backup verification failed; migration stopped before editing that note.");
+
+      await this.app.vault.process(file, current => consolidateInteractionBody(frontmatter, current));
+      await this.app.fileManager.processFrontMatter(file, fm => {
+        for (const field of legacyFields) delete fm[field];
+        delete fm.notes;
+        fm.interaction_notes_schema_version = 1;
+      });
+      migrated++;
+    }
+
+    return { migrated, skipped, backupPath };
   }
 
   async rebuildClientProfile(clientId: string): Promise<void> {
@@ -381,12 +414,13 @@ export class CounselingRepository {
         const topics = Array.isArray(fm?.topics) ? fm.topics.map((topic: unknown) => String(topic)) : [];
         const concerns = Array.isArray(fm?.concerns) ? fm.concerns.map((concern: unknown) => String(concern)) : [];
         const goals = Array.isArray(fm?.goals) ? fm.goals.map((goal: unknown) => String(goal)) : [];
-        const summary = this.singleLine(String(fm?.session_summary ?? ""));
+        const notesText = await this.app.vault.cachedRead(interaction.file);
+        const notes = this.singleLine(this.readNotesSection(notesText));
         sessionLines.push(`- ${this.interactionLink(interaction.file, fm)}`);
         if (topics.length) sessionLines.push(`  - Topics: ${topics.join(", ")}`);
         if (concerns.length) sessionLines.push(`  - Concerns: ${concerns.join(", ")}`);
         if (goals.length) sessionLines.push(`  - Goals: ${goals.join(", ")}`);
-        if (summary) sessionLines.push(`  - Summary: ${summary}`);
+        if (notes) sessionLines.push(`  - Notes: ${notes}`);
       }
     }
 
@@ -397,7 +431,8 @@ export class CounselingRepository {
     } else {
       for (const interaction of contextInteractions) {
         const fm = interaction.frontmatter;
-        const entry = this.singleLine(String(fm?.context_entry ?? fm?.session_summary ?? ""));
+        const notesText = await this.app.vault.cachedRead(interaction.file);
+        const entry = this.singleLine(String(fm?.context_entry ?? this.readLabeledNote(notesText, "Profile context") ?? this.readNotesSection(notesText)));
         if (!entry) continue;
         contextLines.push(`- ${String(fm?.date ?? "Unknown date")} — ${entry}`);
         contextLines.push(`  - Source: ${this.interactionLink(interaction.file, fm)}`);
@@ -426,6 +461,38 @@ export class CounselingRepository {
       frequentTopics: frequentTopics.slice(0, 8).map(topic => `${topic.name} (${topic.count})`)
     });
     await this.app.vault.process(profile, current => this.replaceManagedProfileBlock(current, managedBlock));
+  }
+
+  private getInteractionFiles(): TFile[] {
+    const prefix = `${this.root}/Clients/`;
+    return this.app.vault.getMarkdownFiles().filter(file => {
+      if (!file.path.startsWith(prefix) || !file.path.includes("/Sessions/")) return false;
+      return this.app.metadataCache.getFileCache(file)?.frontmatter?.type === "counseling-interaction";
+    });
+  }
+
+  private sameBytes(left: ArrayBuffer, right: ArrayBuffer): boolean {
+    const a = new Uint8Array(left);
+    const b = new Uint8Array(right);
+    return a.length === b.length && a.every((byte, index) => byte === b[index]);
+  }
+
+  private readNotesSection(markdown: string): string {
+    const bodyStart = markdown.indexOf("\n---\n");
+    const body = bodyStart >= 0 ? markdown.slice(bodyStart + 5) : markdown;
+    const notesIndex = body.search(/^## Notes\s*$/m);
+    if (notesIndex < 0) return "";
+    const contentStart = body.indexOf("\n", notesIndex) + 1;
+    const rest = body.slice(contentStart);
+    const nextHeading = rest.search(/^##\s+/m);
+    return rest.slice(0, nextHeading < 0 ? undefined : nextHeading).trim();
+  }
+
+  private readLabeledNote(markdown: string, label: string): string | null {
+    const notes = this.readNotesSection(markdown);
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = notes.match(new RegExp(`(?:^|\\n)\\*\\*${escaped}:\\*\\*\\s*\\n([\\s\\S]*?)(?=\\n\\n\\*\\*[^*]+:\\*\\*|$)`, "i"));
+    return match?.[1]?.trim() || null;
   }
 
   getClientSummaries(): ClientSummary[] {

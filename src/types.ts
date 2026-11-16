@@ -41,14 +41,16 @@ export interface InteractionInput {
   topics: string[];
   concerns: string[];
   goals: string[];
-  summary: string;
-  addToClientContext: boolean;
-  contextEntry: string;
-  observations: string;
-  biblicalConsiderations: string;
-  interventions: string;
-  commitments: string;
-  followUpDate: string;
+  notes: string;
+  /** Retained only to read older autosaved drafts and keep legacy profile behavior. */
+  addToClientContext?: boolean;
+  summary?: string;
+  contextEntry?: string;
+  observations?: string;
+  biblicalConsiderations?: string;
+  interventions?: string;
+  commitments?: string;
+  followUpDate?: string;
 }
 
 export interface ClientSummary extends ClientRecord {

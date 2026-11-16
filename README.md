@@ -7,7 +7,7 @@ Version `1.0.0` is the first public beta. Test with fictional or non-sensitive s
 ## Features
 
 - Stable, collision-resistant client IDs and one portable folder per client
-- Structured interaction form with date picker, attendees, topics, concerns, goals, narrative sections, and follow-up date
+- Simple interaction form with client, date, type, one consolidated Notes field, attendees, goals, concerns, and topics
 - Reusable shared topic notes
 - Client-specific concern and goal records with resolve, complete, and reopen workflows
 - Automatically managed client summaries, session history, topic counts, and optional context timeline
@@ -51,11 +51,11 @@ Display names may change, but stable IDs and required frontmatter should remain 
 Choose **Record interaction** globally or **New interaction** from a client card:
 
 1. Select the client, date, and interaction type.
-2. Add attendees, shared topics, client-specific concerns, and client-specific goals.
-3. Complete the relevant summary and narrative sections.
-4. Optionally promote a concise, durable context entry to the client profile.
-5. Add a follow-up date if needed.
-6. Create the interaction.
+2. Write the interaction in the single Notes field. Older summary, context, observations, theological considerations, interventions, commitments, and follow-up details are consolidated here.
+3. Add attendees, goals, concerns, and topics in their structured fields.
+4. Create the interaction.
+
+The command **Preview legacy interaction notes migration** reports how many old session notes remain to be consolidated. Run **Consolidate legacy interaction fields into Notes** to migrate them. Before changing each note, the plugin creates and byte-verifies a copy under `<counseling root>/Backups/Interaction Notes <timestamp>/`; the migration can be run again safely, and structured attendees, goals, concerns, and topics remain as frontmatter.
 
 The form autosaves one draft. A successful creation clears it. The generated session is linked back into the client profile automatically.
 
@@ -107,7 +107,7 @@ Counselor Dashboard uses Obsidian's cross-platform Vault and FileManager APIs an
 - No encryption, passwords, accounts, roles, or access controls
 - No compliance, consent, retention, deletion, or professional-policy automation
 - No calendar synchronization, reminders, billing, redacted exports, or formal reports
-- No automatic migration of existing counseling notes
+- Legacy interaction narrative migration is explicit and backed up; it does not move or delete session files
 - No automatic movement of records after changing the root folder
 - No client archive, merge, or delete interface
 - No topic synonym or duplicate-topic management

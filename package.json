@@ -1,6 +1,6 @@
 {
   "name": "counselor-dashboard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Markdown-first client interaction and topic tracking for Christian counselors using Obsidian.",
   "main": "main.js",
   "scripts": {
@@ -8,8 +8,9 @@
     "build": "node esbuild.config.mjs production",
     "typecheck": "tsc --noEmit",
     "test:utils": "node scripts/test-utils.mjs",
+    "test:interaction-notes": "node scripts/test-interaction-notes.mjs",
     "test:portability": "node scripts/validate-portability.mjs",
-    "test": "npm run typecheck && npm run build && npm run test:utils && node scripts/validate-build.mjs && npm run test:portability"
+    "test": "npm run typecheck && npm run build && npm run test:utils && npm run test:interaction-notes && node scripts/validate-build.mjs && npm run test:portability"
   },
   "keywords": [
     "obsidian",

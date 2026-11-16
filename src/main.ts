@@ -64,6 +64,41 @@ export default class CounselorDashboardPlugin extends Plugin {
         await this.refreshDashboard();
       }
     });
+    this.addCommand({
+      id: "preview-interaction-notes-migration",
+      name: "Preview legacy interaction notes migration",
+      callback: () => {
+        const count = this.repository.getLegacyInteractionMigrationCount();
+        new Notice(count
+          ? `${count} legacy interaction ${count === 1 ? "note is" : "notes are"} ready to consolidate into Notes.`
+          : "No legacy interaction notes need migration.");
+      }
+    });
+    this.addCommand({
+      id: "migrate-interaction-notes",
+      name: "Consolidate legacy interaction fields into Notes",
+      callback: async () => {
+        const count = this.repository.getLegacyInteractionMigrationCount();
+        if (!count) {
+          new Notice("No legacy interaction notes need migration.");
+          return;
+        }
+        const confirmed = window.confirm(
+          `Consolidate the narrative fields in ${count} interaction ${count === 1 ? "note" : "notes"} into one Notes section?\n\n` +
+          "A byte-verified copy of every note will be created under the counseling Backups folder first. Attendees, goals, concerns, and topics remain structured."
+        );
+        if (!confirmed) return;
+        try {
+          const result = await this.repository.migrateLegacyInteractionNotes();
+          const remaining = this.repository.getLegacyInteractionMigrationCount();
+          new Notice(`Consolidated ${result.migrated} interaction notes; ${remaining} remain. Verified copies: ${result.backupPath}`);
+          await this.repository.rebuildAllClientProfiles();
+          await this.refreshDashboard();
+        } catch (error) {
+          this.reportError("Interaction notes migration stopped", error);
+        }
+      }
+    });
 
     this.registerEvent(this.app.metadataCache.on("changed", file => {
       if (file.path.startsWith(`${this.repository.root}/`)) this.scheduleDashboardRefresh();
