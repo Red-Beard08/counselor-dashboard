@@ -3,7 +3,7 @@
 import { Notice, Plugin, TFile } from "obsidian";
 import { registerDashboardModule, registerDashboardWidget } from "./dashboard-bridge";
 import { CounselingDashboardView, DASHBOARD_VIEW_TYPE } from "./dashboard";
-import { ConcernManagerModal, GoalManagerModal, NewClientModal, NewInteractionModal } from "./modals";
+import { ConcernManagerModal, GoalManagerModal, InteractionNotesMigrationModal, NewClientModal, NewInteractionModal } from "./modals";
 import { CounselingRepository } from "./repository";
 import { CounselorDashboardSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, type CounselorDashboardSettings } from "./types";
@@ -83,20 +83,17 @@ export default class CounselorDashboardPlugin extends Plugin {
           new Notice("No legacy interaction notes need migration.");
           return;
         }
-        const confirmed = window.confirm(
-          `Consolidate the narrative fields in ${count} interaction ${count === 1 ? "note" : "notes"} into one Notes section?\n\n` +
-          "A byte-verified copy of every note will be created under the counseling Backups folder first. Attendees, goals, concerns, and topics remain structured."
-        );
-        if (!confirmed) return;
-        try {
-          const result = await this.repository.migrateLegacyInteractionNotes();
-          const remaining = this.repository.getLegacyInteractionMigrationCount();
-          new Notice(`Consolidated ${result.migrated} interaction notes; ${remaining} remain. Verified copies: ${result.backupPath}`);
-          await this.repository.rebuildAllClientProfiles();
-          await this.refreshDashboard();
-        } catch (error) {
-          this.reportError("Interaction notes migration stopped", error);
-        }
+        new InteractionNotesMigrationModal(this.app, count, async () => {
+          try {
+            const result = await this.repository.migrateLegacyInteractionNotes();
+            const remaining = this.repository.getLegacyInteractionMigrationCount();
+            new Notice(`Consolidated ${result.migrated} interaction notes; ${remaining} remain. Verified copies: ${result.backupPath}`);
+            await this.repository.rebuildAllClientProfiles();
+            await this.refreshDashboard();
+          } catch (error) {
+            this.reportError("Interaction notes migration stopped", error);
+          }
+        }).open();
       }
     });
 

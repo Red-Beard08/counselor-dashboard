@@ -261,6 +261,36 @@ export class NewInteractionModal extends Modal {
   }
 }
 
+export class InteractionNotesMigrationModal extends Modal {
+  constructor(app: App, private noteCount: number, private onConfirm: () => Promise<void>) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.addClass("counselor-dashboard-modal");
+    contentEl.createEl("h2", { text: "Consolidate interaction notes?" });
+    contentEl.createEl("p", {
+      text: `This will update ${this.noteCount} existing ${this.noteCount === 1 ? "interaction note" : "interaction notes"}.`
+    });
+    contentEl.createEl("p", {
+      text: "Before each note is changed, the plugin creates and byte-verifies a copy under the counseling Backups folder. Summary, profile context, observations, biblical considerations, interventions, commitments, and follow-up details will become labeled text in Notes. Attendees, goals, concerns, and topics remain structured."
+    });
+    const footer = contentEl.createDiv({ cls: "counselor-dashboard-form-footer" });
+    new ButtonComponent(footer).setButtonText("Cancel").onClick(() => this.close());
+    const applyButton = new ButtonComponent(footer).setButtonText("Back up and consolidate").setCta();
+    applyButton.onClick(async () => {
+      applyButton.setDisabled(true);
+      await this.onConfirm();
+      this.close();
+    });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
 export class ConcernManagerModal extends Modal {
   private selectedClientId: string;
 
